@@ -7,14 +7,18 @@
       <canvas id="canvas" width="900" height="700" style="border: 1px solid black;"></canvas>
     </div>
     <div>
+      <span>SCENES </span>
       <button @click="renderOne('Added 5 circles to the canvas one-by-one')">Single objects</button>
       <button @click="renderTwo('Added the 5 circles and a rectangle to a group, then added the group to canvas')">Group</button>
       <button @click="renderThree('Added a group (2 circles), group (3 circles) and a rectangle to canvas')">Single and group</button>
     </div>
     <div>
+      <span>ACTIONS </span>
       <button @click="printInfo">Print info</button>
       <button @click="selectAll">Select all</button>
       <button @click="deselectAll">Deselect all</button>
+      <button @click="groupSelection">Group selection</button>
+      <button @click="ungroupSelection">Ungroup selection</button>
     </div>
 </div>
 </template>
@@ -72,6 +76,33 @@ const selectAll = () => {
 const deselectAll = () => {
   canvas.discardActiveObject()
   canvas.requestRenderAll()
+}
+
+const groupSelection = () => {
+  const activeObject = canvas.getActiveObject()
+  if(!activeObject) {
+    console.log('no activeObject - returning')
+    return
+  } else if(activeObject.type !== 'activeSelection') {
+    console.log("activeObject.type !== 'activeSelection' - returning")
+    return
+  } else { // type === 'activeSelection'
+    // activeObject.toGroup() // latest API - doens't work in current patch version
+
+    const objs = canvas.getActiveObjects() // same as canvas._activeObject._objects
+    canvas.remove(...objs) // Remove the objects from the canvas itself, since we're going to re-add them as part of a group    
+    //
+    // !!! NB: must make sure it is passed as new fabric.Object(o) !!!
+    //
+    const group = new fabric.Group(objs.map(o => new fabric.Object(o)))
+    canvas.add(group)
+    canvas.setActiveObject(group)
+  }
+}
+
+const ungroupSelection = () => {
+  //
+  console.log("TODO!")
 }
 
 const log = (descr,...args) => {
