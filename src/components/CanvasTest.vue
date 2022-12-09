@@ -13,18 +13,11 @@
     <div>
       <span>ACTIONS </span>
       <button @click="selectAll">Select all</button>
-      <button @click="removeWorldTransform">Remove parent transform</button>
       <button @click="groupSelection">Group selection</button>
       <button @click="ungroupSelection">Ungroup selection</button>
       <button @click="test">TEST</button>
       <button @click="clearConsole">CLEAR CONSOLE</button>
       <button @click="sanityCheck">SANITY CHECK</button>
-      <button @click="setSelectedToIdentity">Set selected to identity</button>
-    </div>
-    <div>
-      <span>SAFE ACTIONS </span>
-      <button @click="safeGroupSelection">Group selection</button>
-      <button @click="ungroupSelection">Ungroup selection</button>
     </div>
 </div>
 </template>
@@ -75,29 +68,22 @@ onMounted(() => {
   })
 })
 
-const safeGroupSelection = () => {
+const groupSelection = () => {
   const activeObject = canvas.getActiveObject()
 
   if(!activeObject || activeObject?.type !== 'activeSelection') {
     return
   } else { // type === 'activeSelection'
-    // get all selected objects
-    const objects = canvas.getActiveObjects() // same as canvas._activeObject._objects
-
-    //
-    // CURRENT LIMIATION: cannot group another group (YET!)
-    //
-    for(let i=0; i<objects.length; i++) {
-      if(objects[i].type === 'group') return
-    }
+    const objects = canvas.getActiveObjects()
 
     canvas.remove(...objects)
-    //
-    // !!! NB: must make sure it is passed as new fabric.Object(o) !!!
-    //
-    const group = new fabric.Group(objects.map(object => new fabric.Object(object)))
 
-    // update group coords to that of activeObject
+    const group = new fabric.Group()
+
+    objects.forEach(object => {
+      group.addWithUpdate(object)
+    })
+  
     group.set({
       left: activeObject.left,
       top: activeObject.top,
