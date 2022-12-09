@@ -81,8 +81,6 @@ const safeGroupSelection = () => {
   if(!activeObject || activeObject?.type !== 'activeSelection') {
     return
   } else { // type === 'activeSelection'
-    // activeObject.toGroup() // latest API - doens't work in current patch version
-
     // get all selected objects
     const objects = canvas.getActiveObjects() // same as canvas._activeObject._objects
 
@@ -93,7 +91,7 @@ const safeGroupSelection = () => {
       if(objects[i].type === 'group') return
     }
 
-    canvas.remove(...objects) // Remove the objects from the canvas itself, since we're going to re-add them as part of a group    
+    canvas.remove(...objects)
     //
     // !!! NB: must make sure it is passed as new fabric.Object(o) !!!
     //
@@ -101,8 +99,8 @@ const safeGroupSelection = () => {
 
     // update group coords to that of activeObject
     group.set({
-      left: activeObject.left, // coords.tl.x,
-      top: activeObject.top, // coords.tl.y
+      left: activeObject.left,
+      top: activeObject.top,
     })
 
     canvas.add(group)
@@ -111,43 +109,16 @@ const safeGroupSelection = () => {
 
 const ungroupSelection = () => {
   const group = canvas.getActiveObject()
-
-  /*
-  For each object in the group we need to make a copy of it.
-  We then multiply that objects local matrix by the group local (world) matrix
-  */
+  
   if(group && group.type === 'group') {
     const objects = group.getObjects()
 
-    const groupXform = group.calcTransformMatrix()
-
-    console.log('groupXform = ',groupXform)
-
     objects.forEach(object => {
-
       group.removeWithUpdate(object)
-
-      // fabric.util.applyTransformToObject(
-      //   object,
-      //   fabric.util.multiplyTransformMatrices(
-      //     groupXform,
-      //     // fabric.util.invertTransform(groupXform),
-      //     // object.calcOwnMatrix(),
-      //     object.calcTransformMatrix()
-      //   )
-      //   // [1,0,0,1,0,0]
-      //   // object.calcOwnMatrix()
-      // )
-
-      // object.setCoords()
-
-      // add object back to the canvas
       canvas.add(object)
     })
+
     canvas.discardActiveObject()
-
-    objects.forEach(o => printObjectInfo(o))
-
   } else {
     // NOT A GROUP!
     // show notification?
