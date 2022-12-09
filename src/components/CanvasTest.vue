@@ -12,6 +12,7 @@
       <button @click="renderTwo('Added the 5 circles and a rectangle to a group, then added the group to canvas')">Group</button>
       <button @click="renderThree('Added a group (2 circles), group (3 circles) and a rectangle to canvas')">Single and group</button>
       <button @click="renderFour('TESTING TRANSFORMS')">Test transforms</button>
+      <button @click="renderFive('TESTING REAL GROUP')">Test real group</button>
     </div>
     <div>
       <span>ACTIONS </span>
@@ -22,6 +23,13 @@
       <button @click="ungroupSelection">Ungroup selection</button>
       <button @click="test">TEST</button>
       <button @click="clearConsole">CLEAR CONSOLE</button>
+      <button @click="sanityCheck">SANITY CHECK</button>
+      <button @click="setSelectedToIdentity">Set selected to identity</button>
+    </div>
+    <div>
+      <span>SAFE ACTIONS </span>
+      <button @click="safeGroupSelection">Group selection</button>
+      <button @click="ungroupSelection">Ungroup selection</button>
     </div>
 </div>
 </template>
@@ -38,6 +46,8 @@ const setTitle = s => title.value = s
 onMounted(() => {
   canvasDomNode = document.getElementById('canvas')
   canvas = markRaw(new fabric.Canvas(canvasDomNode))
+
+  renderThree() // default scene
 
   canvas.on('selection:updated',() => {
     //
@@ -70,6 +80,12 @@ const test = () => {
   })
 }
 
+const setSelectedToIdentity = () => {
+  canvas.getActiveObjects().forEach(object => {
+    fabric.util.applyTransformToObject(object,[1,0,0,1,0,0])
+  })
+}
+
 const clear = () => { canvas.clear().requestRenderAll() }
 
 const renderOne = (title) => {
@@ -89,7 +105,13 @@ const renderTwo = (title) => {
 const renderThree = (title) => {
   clear(); setTitle(title)
   const g1 = new fabric.Group([c1,c2,c4])
+  g1.set({
+    name: 'Group #1 (3 circles)'
+  })
   const g2 = new fabric.Group([c3,c5])
+  g2.set({
+    name: 'Group #2: (2 circles)'
+  })
   canvas.add(g1)
   canvas.add(g2)
   canvas.add(r1)
@@ -128,6 +150,43 @@ const renderFour = (title) => {
 
   console.clear()
   printObjectInfo(circle)
+}
+
+const renderFive = (title) => {
+  clear(); setTitle(title);
+  const circle = new fabric.Circle({
+    originX: 'center',
+    originY: 'center',
+    radius: 100,
+    left: 450,
+    top: 350,
+    // opacity: 0,
+    fill: 'rgba(0,0,0,0)',
+    stroke: 'red',
+    strokeWidth: 5,
+    name: 'Circle'
+  })
+  const rectangle = new fabric.Rect({
+    originX: 'center',
+    originY: 'center',
+    width: 600,
+    height: 400,
+    left: 450,
+    top: 350,
+    // opacity: 0,
+    fill: 'rgba(0,0,0,0)',
+    stroke: 'green',
+    strokeWidth: 5,
+    name: 'Rectangle'
+  })
+  const group = new fabric.Group([rectangle,circle])
+  group.set({name: 'GROUP'})
+  canvas.add(group)
+
+  console.clear()
+  printObjectInfo(group)
+  printObjectInfo(circle)
+  printObjectInfo(rectangle)
 }
 
 ///////////////////////////////////////////////////////////////
@@ -207,7 +266,123 @@ const groupSelection = () => {
   }
 }
 
+const safeGroupSelection = () => {
+  const activeObject = canvas.getActiveObject()
+
+  if(!activeObject || activeObject?.type !== 'activeSelection') {
+    return
+  } else { // type === 'activeSelection'
+    // activeObject.toGroup() // latest API - doens't work in current patch version
+
+    // get all selected objects
+    const objects = canvas.getActiveObjects() // same as canvas._activeObject._objects
+
+    //
+    // CURRENT LIMIATION: cannot group another group (YET!)
+    //
+    for(let i=0; i<objects.length; i++) {
+      if(objs[i].type === 'group') return
+    }
+
+    canvas.remove(...objects) // Remove the objects from the canvas itself, since we're going to re-add them as part of a group    
+    //
+    // !!! NB: must make sure it is passed as new fabric.Object(o) !!!
+    //
+    const group = new fabric.Group(objects.map(object => new fabric.Object(object)))
+
+    // update group coords to that of activeObject
+    const coords = activeObject.oCoords
+    group.set({
+      left: coords.tl.x,
+      top: coords.tl.y
+    })
+
+    canvas.add(group)
+  }
+}
+
 const ungroupSelection = () => {
+
+  log('UNGROUPING!')
+
+  const group = canvas.getActiveObject()
+
+  // debug
+  printObjectInfo(group)
+  if(group && group.type === 'group') {
+    group.getObjects().forEach(o => {
+      printObjectInfo(o)
+      const gM = group.calcOwnMatrix()
+      const oM = o.calcOwnMatrix()
+      console.log(`groupM * objectM = ${fabric.util.multiplyTransformMatrices(gM,oM)}`)
+    })
+  }
+  //
+
+  /*
+  For each object in the group we need to make a copy of it.
+  We then multiply that objects local matrix by the group local (world) matrix
+  */
+  if(group && group.type === 'group') {
+    const objects = group.getObjects()
+
+    console.log(`there are ${objects.length} objects in the group...`)
+    console.log(objects)
+
+    const groupMatrix = group.calcTransformMatrix() // group.calcOwnMatrix() // [1,0,0,1,group.left,group.top]
+    const coords = group.aCoords
+
+    console.log(`groupMatrix = ${groupMatrix}`)
+    // console.log(`qrDecompose groupMatirx =`,fabric.util.qrDecompose(groupMatrix))
+
+    objects.forEach(object => {
+      //
+      const objMatrix = object.calcTransformMatrix() // object.calcOwnMatrix()
+      //
+      console.log(`objMatrix = ${objMatrix}`)
+      group.remove(object)
+
+      const identity = [1,0,0,1,0,0]
+      const xform = fabric.util.multiplyTransformMatrices(
+        groupMatrix,
+        objMatrix
+      )
+
+      // fabric.util.applyTransformToObject(
+      //   object,
+      //   xform
+      // )
+
+      fabric.util.removeTransformFromObject(object,groupMatrix)
+      // fabric.util.applyTransformToObject(object,xform)
+
+      object.set({
+        left: (object.left + group.left) + object.width * 0.5,
+        top: (object.top + group.top) + object.height * 0.5
+      })
+
+      printObjectInfo(object)
+
+      // add object back to the canvas
+      canvas.add(object)
+
+      // // DEBUG HELPER!
+      // const circle = new fabric.Circle({
+      //   radius: 50,
+      //   fill: 'BLUE'
+      // })
+      // fabric.util.applyTransformToObject(circle,groupMatrix)
+      // canvas.add(circle)
+
+    })
+
+    // canvas.discardActiveObject()
+  } else {
+    // NOT A GROUP!
+  }
+}
+
+const sanityCheck = () => {
   //
   console.log("TODO!")
   const objects = canvas.getObjects()
@@ -264,9 +439,12 @@ const printObjectInfo = obj => {
     console.log(obj.name)
     console.log('-'.repeat(obj.name.length))
   }
-  console.log('oCoords',obj.oCoords)
-  console.log('transformMatrix',obj.calcTransformMatrix())
-  console.log('transformMatrix inverse',fabric.util.invertTransform(obj.calcTransformMatrix()))
+  console.log('aCoords',obj.aCoords)
+  console.log('[left,top] = [',obj.left,',',obj.top,']')
+  console.log('[width,height] = [',obj.width,',',obj.height,']')
+  console.log('worldMatrix',obj.calcTransformMatrix())
+  // console.log('transformMatrix',obj.calcTransformMatrix())
+  // console.log('transformMatrix inverse',fabric.util.invertTransform(obj.calcTransformMatrix()))
   console.log('calcOwnMatrix',obj.calcOwnMatrix())
 }
 
@@ -314,11 +492,13 @@ const c2 = new fabric.Circle({
 const c3 = new fabric.Circle({
   radius: 10,
   fill: 'blue',
+  left: 0,
+  top: 0,
   originX: 'center',
   originY: 'center',
   left: 510,
   top: 280,
-  name: 'Circle #3'
+  name: '!!!!!!!!!! Circle #3 !!!!!!!!!!!!!'
 })
 
 const c4 = new fabric.Circle({
